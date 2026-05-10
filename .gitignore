@@ -1,0 +1,19 @@
+__pycache__/
+.venv/
+work/
+
+env.ps1
+work_record_defaults.json
+work_records.yaml
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
