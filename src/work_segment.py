@@ -11,13 +11,13 @@ class SarWorkArea(StrEnum):
     NONE = ("", "-")
 
     def __new__(cls, value, jp_name):
-        # SAR の実際の選択肢の値が分かり次第、この値を画面値に合わせる。
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.jp_name = jp_name
         return obj
 
 
+# ★「workSegments.ps1」と同期を取ること
 class HrmosWorkSegment(StrEnum):
     """HRMOS の勤務区分 ID と画面表示名の対応表。"""
 
@@ -62,7 +62,6 @@ class HrmosWorkSegment(StrEnum):
     sar_enum: SarWorkArea
 
     def __new__(cls, value, jp_name, sar_enum):
-        # 選択操作に渡す値は文字列 ID、ログには日本語名も出したいため属性に保持する。
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.jp_name = jp_name

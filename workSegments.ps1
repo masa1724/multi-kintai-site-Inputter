@@ -1,4 +1,5 @@
-﻿$workSegments = @(
+﻿# ★「work_segment.py」と同期を取ること
+$workSegments = @(
   @{ Key = "OFFICE"; Label = "出勤" },
   @{ Key = "REMOTE"; Label = "出勤(在宅)" },
   @{ Key = "HOLIDAY"; Label = "公休" },
