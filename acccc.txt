@@ -1,1216 +1,859 @@
-# Pythonジョブ設定ファイル生成シェル 仕様書
+@startuml
+!theme plain
+
+title <size:20><b>データフローサンプル</b></size>
+
+hide stereotype
+top to bottom direction
+
+
+' =====================================================
+' 共通設定
+'
+' 複数の引数・レコードは「~」で区切る。
+' プロシージャ定義・呼び出しは1物理行で記述する。
+' =====================================================
+
+
+' -----------------------------------------------------
+' 表示用の空行
+'
+' 末尾の単純な改行は省略される場合があるため、
+' 全角スペースを含む行を空行として使用する。
+' -----------------------------------------------------
+
+!$blankLine = "\n<size:10>　</size>"
+
+
+' =====================================================
+' ジョブ生成プロシージャ
+'
+' $id          : PlantUML上の識別子
+' $feature     : 機能名
+' $jobName     : ジョブ名
+' $programName : プログラム名
+' $args        : 実行引数。「~」区切り。省略可能
+' $cycle       : 日次、月次、期次、年次、随時
+' $kind        : normal、sameProgram
+'
+' $argsが空の場合、[args]は表示しない。
+' プログラム名の下には常に空行を表示する。
+' =====================================================
+
+!procedure $job($id, $feature, $jobName, $programName, $args="", $cycle="日次", $kind="normal")
+
+    ' ---------------------------------------------
+    ' 機能バッジ
+    ' ---------------------------------------------
 
-## 1. 概要
+    !$featureBg = "#F1F5F9"
+    !$featureFg = "#475569"
+
+    !if $feature == "取込"
+        !$featureBg = "#E0F2FE"
+        !$featureFg = "#0369A1"
+    !elseif $feature == "統合・分類"
+        !$featureBg = "#F3E8FF"
+        !$featureFg = "#7E22CE"
+    !elseif $feature == "集計"
+        !$featureBg = "#DCFCE7"
+        !$featureFg = "#15803D"
+    !elseif $feature == "反映"
+        !$featureBg = "#FEF3C7"
+        !$featureFg = "#B45309"
+    !elseif $feature == "検証"
+        !$featureBg = "#F1F5F9"
+        !$featureFg = "#475569"
+    !endif
 
-指定されたフォルダ内のPythonファイルを走査し、各Pythonファイルに記述されている `jobparameters` のパラメータ名を抽出して、ファイル単位の `.conf` ファイルを生成する。
 
-生成する `.conf` ファイルには、以下を出力する。
+    ' ---------------------------------------------
+    ' 実行周期
+    ' ---------------------------------------------
+
+    !$cycleColor = "#2563EB"
+    !$cycleMark = "●"
+
+    !if $cycle == "月次"
+        !$cycleColor = "#059669"
+        !$cycleMark = "■"
+    !elseif $cycle == "期次"
+        !$cycleColor = "#D97706"
+        !$cycleMark = "◆"
+    !elseif $cycle == "年次"
+        !$cycleColor = "#7C3AED"
+        !$cycleMark = "★"
+    !elseif $cycle == "随時"
+        !$cycleColor = "#64748B"
+        !$cycleMark = "○"
+    !endif
 
-* ワーカー数
-* ワーカー種別
-* `jobparameters` に定義されているパラメータ
-* パラメータの環境変数参照形式
 
-ワーカー数とワーカー種別は既定値を持ち、`worker_settings_override.properties` に設定があるPythonファイルについては、ファイル単位で設定を上書きする。
+    ' ---------------------------------------------
+    ' ヘッダ
+    ' ---------------------------------------------
 
----
+    !$featureBadge = "<back:" + $featureBg + "><color:" + $featureFg + "><b> " + $feature + " </b></color></back>"
+    !$cycleBadge = "<color:" + $cycleColor + "><b>" + $cycleMark + " " + $cycle + "</b></color>"
 
-## 2. 実行方式
+    !$label = "<size:9>" + $featureBadge + "  " + $cycleBadge
 
-シェルスクリプトの実行時に、以下の2つのフォルダを引数として指定する。
+    !if $kind == "sameProgram"
+        !$label = $label + "  <back:#EEF2FF><color:#4F46E5><b> 共通PG </b></color></back>"
+    !endif
 
-1. Pythonファイル格納フォルダ
-2. 出力先親フォルダ
+    !$label = $label + "</size>"
 
-実行例：
 
-```bash
-./create_conf.sh /path/to/python /path/to/output
-```
+    ' ---------------------------------------------
+    ' ジョブ名
+    ' ---------------------------------------------
 
-引数の数が2つでない場合は、使用方法を標準エラー出力へ表示し、異常終了する。
+    !$label = $label + "\n<b>" + $jobName + "</b>"
 
-使用方法の表示例：
 
-```text
-使用方法: ./create_conf.sh PYファイル格納フォルダ 出力先親フォルダ
-```
+    ' ---------------------------------------------
+    ' プログラム物理名
+    '
+    ' argsの有無にかかわらず、
+    ' 物理名の下に空行を表示する。
+    ' ---------------------------------------------
 
----
+    !if $programName != ""
+        !$label = $label + "\n<size:10><color:#475569>" + $programName + "</color></size>"
+        !$label = $label + $blankLine
+    !endif
 
-## 3. ファイル・フォルダ構成
 
-想定する構成は以下のとおり。
+    ' ---------------------------------------------
+    ' 実行引数
+    ' ---------------------------------------------
 
-```text
-任意のフォルダ/
-├── create_conf.sh
-├── worker_settings_override.properties
-├── python/
-│   ├── file1.py
-│   ├── file2.py
-│   └── file3.py
-└── output/
-```
+    !if $args != ""
+        !$argList = %splitstr($args, "~")
 
-実行後は、出力先親フォルダの配下にタイムスタンプ付きフォルダを作成する。
+        !$label = $label + "\n<size:10><color:#475569><b>[args]</b></color></size>\l"
 
-```text
-任意のフォルダ/
-├── create_conf.sh
-├── worker_settings_override.properties
-├── python/
-│   ├── file1.py
-│   ├── file2.py
-│   └── file3.py
-└── output/
-    └── conf_20260716_083000/
-        ├── file1.conf
-        ├── file2.conf
-        └── file3.conf
-```
+        !foreach $arg in $argList
+            !$label = $label + "<size:10><color:#64748B>- " + $arg + "</color></size>\l"
+        !endfor
+    !endif
 
-Pythonファイル格納フォルダと出力先親フォルダは別フォルダとする。
+    rectangle "$label" as $id
+!endprocedure
 
----
 
-## 4. 入力ファイル
+' =====================================================
+' テーブル生成プロシージャ
+'
+' $id           : PlantUML上の識別子
+' $logicalName  : 論理テーブル名
+' $physicalName : 物理テーブル名
+' $records      : レコード一覧。「~」区切り。省略可能
+' $kind         : normal、result
+'
+' $recordsが空の場合、[records]は表示しない。
+' 物理名の下には常に空行を表示する。
+' =====================================================
 
-### 4.1 Pythonファイル
+!procedure $table($id, $logicalName, $physicalName, $records="", $kind="normal")
 
-指定されたPythonファイル格納フォルダの直下にある、拡張子が `.py` の通常ファイルを処理対象とする。
+    ' ---------------------------------------------
+    ' 論理名
+    ' ---------------------------------------------
 
-例：
+    !$label = "<b>" + $logicalName + "</b>"
 
-```text
-file1.py
-file2.py
-file3.py
-```
 
-サブフォルダ内のPythonファイルは処理対象外とする。
+    ' ---------------------------------------------
+    ' 物理名
+    '
+    ' recordsの有無にかかわらず、
+    ' 物理名の下に空行を表示する。
+    ' ---------------------------------------------
 
-対象ファイルの検索条件は、以下に相当する。
+    !if $physicalName != ""
+        !$label = $label + "\n<size:10><color:#475569>" + $physicalName + "</color></size>"
+        !$label = $label + $blankLine
+    !endif
 
-```bash
-find "$python_dir" -maxdepth 1 -type f -name '*.py'
-```
 
-Pythonファイル格納フォルダの直下に `.py` ファイルが1件も存在しない場合は、異常終了する。
+    ' ---------------------------------------------
+    ' レコード一覧
+    ' ---------------------------------------------
 
----
+    !if $records != ""
+        !$recordList = %splitstr($records, "~")
 
-### 4.2 worker_settings_override.properties
+        !$label = $label + "\n<size:10><color:#475569><b>[records]</b></color></size>\l"
 
-ワーカー設定の上書きに使用する設定ファイル。
+        !foreach $record in $recordList
+            !$label = $label + "<size:10><color:#64748B>- " + $record + "</color></size>\l"
+        !endfor
+    !endif
 
-ファイル名は固定とする。
 
-```text
-worker_settings_override.properties
-```
+    ' ---------------------------------------------
+    ' テーブル生成
+    ' ---------------------------------------------
 
-配置場所は、`create_conf.sh` と同じフォルダとする。
+    !if $kind == "result"
+        database "$label" as $id <<result>>
+    !else
+        database "$label" as $id
+    !endif
+!endprocedure
 
-スクリプトを別のカレントディレクトリから実行した場合でも、カレントディレクトリではなく、スクリプト自身が配置されているフォルダから設定ファイルを読み込む。
 
-設定ファイルのパスは、以下の考え方で取得する。
+' =====================================================
+' ファイル生成プロシージャ
+'
+' $id           : PlantUML上の識別子
+' $logicalName  : 論理ファイル名
+' $physicalName : 物理ファイル名
+' $records      : レコード一覧。「~」区切り。省略可能
+'
+' $recordsが空の場合、[records]は表示しない。
+' 物理名の下には常に空行を表示する。
+' =====================================================
 
-```bash
-script_dir="$(
-    cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-    pwd
-)"
+!procedure $dataFile($id, $logicalName, $physicalName, $records="")
 
-override_file="${script_dir}/worker_settings_override.properties"
-```
+    ' ---------------------------------------------
+    ' 論理名
+    ' ---------------------------------------------
 
-`worker_settings_override.properties` が存在しない場合は、処理を継続せず異常終了する。
+    !$label = "<b>" + $logicalName + "</b>"
 
----
 
-## 5. worker_settings_override.propertiesの形式
+    ' ---------------------------------------------
+    ' 物理名
+    '
+    ' recordsの有無にかかわらず、
+    ' 物理名の下に空行を表示する。
+    ' ---------------------------------------------
 
-### 5.1 基本形式
+    !if $physicalName != ""
+        !$label = $label + "\n<size:10><color:#475569>" + $physicalName + "</color></size>"
+        !$label = $label + $blankLine
+    !endif
 
-1行につき、1つのPythonファイルのワーカー設定を記載する。
 
-```properties
-拡張子を除いたPythonファイル名=worker_nums,worker_type
-```
+    ' ---------------------------------------------
+    ' レコード一覧
+    ' ---------------------------------------------
 
-例：
+    !if $records != ""
+        !$recordList = %splitstr($records, "~")
 
-```properties
-file1=1,ABC
-file2=1,CBD
-file3=2,ABC
-```
+        !$label = $label + "\n<size:10><color:#475569><b>[records]</b></color></size>\l"
 
-この設定は、以下のPythonファイルに対応する。
+        !foreach $record in $recordList
+            !$label = $label + "<size:10><color:#64748B>- " + $record + "</color></size>\l"
+        !endfor
+    !endif
 
-```text
-file1.py
-file2.py
-file3.py
-```
+    file "$label" as $id
+!endprocedure
 
----
 
-### 5.2 設定値の意味
+' =====================================================
+' 全体デザイン
+' =====================================================
 
-左辺：
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam linetype ortho
+skinparam roundcorner 12
+skinparam nodesep 55
+skinparam ranksep 45
+skinparam defaultFontName SansSerif
 
-```text
-拡張子を除いたPythonファイル名
-```
 
-右辺の1項目目：
+' -----------------------------------------------------
+' オブジェクトの最大幅
+'
+' ジョブ      : 280
+' DB・ファイル: 250
+' -----------------------------------------------------
 
-```text
-worker_nums
-```
-
-右辺の2項目目：
-
-```text
-worker_type
-```
-
-例：
-
-```properties
-file2=1,CBD
-```
-
-この場合、`file2.py` から生成する `file2.conf` には、以下を出力する。
-
-```properties
-worker_nums="1"
-worker_type="CBD"
-```
-
----
-
-### 5.3 空白の扱い
-
-各項目の前後にある空白は除去する。
-
-以下の記述も有効とする。
-
-```properties
-file1 = 1, ABC
-```
-
-この場合、以下と同じ設定として扱う。
-
-```properties
-file1=1,ABC
-```
-
----
-
-### 5.4 空行とコメント
-
-以下の行は無視する。
-
-* 空行
-* 先頭が `#` の行
-* 先頭が `;` の行
-
-例：
-
-```properties
-# file1の設定
-file1=1,ABC
-
-; file2の設定
-file2=2,CBD
-```
-
-行全体の前後空白を除去した後に、コメント行かどうかを判定する。
-
-インラインコメントには対応しない。
-
-以下のような記述は使用しない。
-
-```properties
-file1=1,ABC # コメント
-```
-
----
-
-### 5.5 改行コード
-
-Windows環境で作成された設定ファイルも扱えるように、各行の末尾にあるキャリッジリターンを除去する。
-
-対象：
-
-```text
-CRLF
-```
-
-処理後：
-
-```text
-LF相当
-```
-
----
-
-## 6. ワーカー設定
-
-### 6.1 既定値
-
-`worker_settings_override.properties` に対象ファイルの設定が存在しない場合は、以下の既定値を使用する。
-
-```properties
-worker_nums="1"
-worker_type="ABC"
-```
-
-シェルスクリプト内の既定値は、以下とする。
-
-```bash
-DEFAULT_WORKER_NUMS="1"
-DEFAULT_WORKER_TYPE="ABC"
-```
-
----
-
-### 6.2 上書き
-
-`worker_settings_override.properties` に、Pythonファイルの拡張子を除いたファイル名と一致する設定が存在する場合は、既定値を上書きする。
-
-例：
-
-Pythonファイル：
-
-```text
-file2.py
-```
-
-設定ファイル：
-
-```properties
-file2=2,CBD
-```
-
-生成結果：
-
-```properties
-worker_nums="2"
-worker_type="CBD"
-```
-
----
-
-### 6.3 設定が存在しないPythonファイル
-
-設定ファイルに対象Pythonファイルの記載がないことはエラーとしない。
-
-例：
-
-Pythonファイル：
-
-```text
-file1.py
-file2.py
-```
-
-設定ファイル：
-
-```properties
-file1=2,CBD
-```
-
-結果：
-
-* `file1.py` は上書き値を使用する。
-* `file2.py` は既定値を使用する。
-
----
-
-## 7. worker_settings_override.propertiesのチェック仕様
-
-### 7.1 イコールが存在しない行
-
-コメントでも空行でもない行に `=` が存在しない場合は、設定形式不正として異常終了する。
-
-不正例：
-
-```properties
-file1 1,ABC
-```
-
-エラー例：
-
-```text
-設定形式が不正です（3行目）: file1 1,ABC
-```
-
----
-
-### 7.2 ファイル名が空
-
-`=` の左辺が空の場合は異常終了する。
-
-不正例：
-
-```properties
-=1,ABC
-```
-
-エラー例：
-
-```text
-ファイル名が空です（3行目）
-```
-
----
-
-### 7.3 同一ファイル名の重複
-
-同じ拡張子なしファイル名が複数行に記載されている場合は、どちらの設定を採用するか曖昧になるため、異常終了する。
-
-不正例：
-
-```properties
-file2=1,CBD
-file2=2,ABC
-```
-
-エラー例：
-
-```text
-同じファイル名が重複しています: file2
-  2行目と3行目
-```
-
-後勝ちや先勝ちにはしない。
-
-1つのファイル名に対して、設定は1行のみとする。
-
----
-
-### 7.4 カンマが存在しない
-
-右辺にカンマが存在しない場合は異常終了する。
-
-不正例：
-
-```properties
-file1=1
-```
-
-エラー例：
-
-```text
-設定値は worker_nums,worker_type の形式で記載してください（3行目）: file1=1
-```
-
----
-
-### 7.5 カンマが複数存在する
-
-右辺にカンマが2個以上存在する場合は異常終了する。
-
-不正例：
-
-```properties
-file1=1,ABC,XYZ
-```
-
-エラー例：
-
-```text
-設定値のカンマが多すぎます（3行目）: file1=1,ABC,XYZ
-```
-
-設定値は必ず2項目とする。
-
-```text
-worker_nums,worker_type
-```
-
----
-
-### 7.6 worker_numsの形式
-
-`worker_nums` は、0以上の整数を表す数字のみ許可する。
-
-許可例：
-
-```properties
-file1=0,ABC
-file2=1,ABC
-file3=10,CBD
-```
-
-不許可例：
-
-```properties
-file1=-1,ABC
-file2=1.5,ABC
-file3=A,ABC
-```
-
-判定条件は以下とする。
-
-```bash
-^[0-9]+$
-```
-
-不正時のエラー例：
-
-```text
-worker_numsは整数で指定してください（3行目）: 1.5
-```
-
-なお、業務上 `0` を禁止する必要がある場合は、実装時に1以上へチェックを強化すること。現時点の仕様では、数字のみであれば `0` も許可する。
-
----
-
-### 7.7 worker_typeの形式
-
-`worker_type` には、以下の文字のみ許可する。
-
-* 半角英字
-* 半角数字
-* アンダースコア
-* ハイフン
-
-判定条件は以下とする。
-
-```bash
-^[A-Za-z0-9_-]+$
-```
-
-許可例：
-
-```properties
-file1=1,ABC
-file2=1,CBD
-file3=2,TYPE_1
-file4=2,TYPE-A
-```
-
-不許可例：
-
-```properties
-file1=1,
-file2=1,ABC DEF
-file3=1,ABC/DEF
-file4=1,あいう
-```
-
-不正時のエラー例：
-
-```text
-worker_typeに使用できない文字が含まれています（3行目）: ABC DEF
-```
-
----
-
-## 8. jobparametersの抽出仕様
-
-### 8.1 対象となる記述
-
-Pythonファイル内の、以下の形式を対象とする。
-
-```python
-parsed_args = jobparameters(args, "param1", "param2", "param3")
-```
-
-複数行にまたがる記述にも対応する。
-
-```python
-parsed_args = jobparameters(
-    args,
-    "param1",
-    "param2",
-    "param3"
-)
-```
-
-`jobparameters` と `(` の間、`(` と `args` の間、`args` と `,` の間には、空白や改行が存在してもよい。
-
----
-
-### 8.2 シングルクォートとダブルクォート
-
-パラメータ名は、以下の両方に対応する。
-
-ダブルクォート：
-
-```python
-jobparameters(args, "param1", "param2")
-```
-
-シングルクォート：
-
-```python
-jobparameters(args, 'param1', 'param2')
-```
-
----
-
-### 8.3 抽出範囲
-
-`jobparameters(args,` の後から、最初に対応するものとして正規表現上検出された `)` までを抽出対象とする。
-
-抽出対象内にある、シングルクォートまたはダブルクォートで囲まれた文字列を、パラメータ名として取得する。
-
-実装イメージ：
-
-```perl
-while (/jobparameters\s*\(\s*args\s*,(.*?)\)/sg) {
-    my $arguments = $1;
-
-    while ($arguments =~ /(["'])([^"']+)\1/g) {
-        print "$2\n";
-    }
+<style>
+rectangle {
+    MaximumWidth 280
 }
-```
 
----
+database {
+    MaximumWidth 250
+}
 
-### 8.4 複数のjobparameters
+file {
+    MaximumWidth 250
+}
+</style>
 
-1つのPythonファイル内に `jobparameters` が複数存在する場合は、すべてを抽出対象とする。
 
-例：
+' -----------------------------------------------------
+' 矢印
+' -----------------------------------------------------
 
-```python
-parsed_args1 = jobparameters(
-    args,
-    "param1",
-    "param2"
-)
+skinparam ArrowColor #64748B
+skinparam ArrowThickness 1
+skinparam ArrowFontColor #64748B
+skinparam ArrowFontSize 10
 
-parsed_args2 = jobparameters(
-    args,
-    "param3",
-    "param4"
-)
-```
 
-出力：
+' -----------------------------------------------------
+' ジョブ
+' -----------------------------------------------------
 
-```properties
-param1="${param1}"
-param2="${param2}"
-param3="${param3}"
-param4="${param4}"
-```
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #CBD5E1
+skinparam rectangleFontColor #0F172A
+skinparam rectangleFontSize 12
 
----
 
-### 8.5 同じパラメータが複数回登場する場合
+' -----------------------------------------------------
+' DB
+' -----------------------------------------------------
 
-重複排除は行わない。
+skinparam databaseBackgroundColor #F8FAFC
+skinparam databaseBorderColor #94A3B8
+skinparam databaseFontColor #334155
+skinparam databaseFontSize 12
 
-同じパラメータが複数回抽出された場合は、抽出された順番のまま複数行出力する。
+skinparam databaseBackgroundColor<<result>> #ECFDF5
+skinparam databaseBorderColor<<result>> #6EE7B7
+skinparam databaseFontColor<<result>> #064E3B
 
-例：
 
-```python
-parsed_args1 = jobparameters(
-    args,
-    "param1",
-    "param2"
-)
+' -----------------------------------------------------
+' ファイル
+' -----------------------------------------------------
 
-parsed_args2 = jobparameters(
-    args,
-    "param1",
-    "param3"
-)
-```
+skinparam fileBackgroundColor #F8FAFC
+skinparam fileBorderColor #94A3B8
+skinparam fileFontColor #334155
+skinparam fileFontSize 12
 
-出力：
 
-```properties
-worker_nums="1"
-worker_type="ABC"
-param1="${param1}"
-param2="${param2}"
-param1="${param1}"
-param3="${param3}"
-```
+' -----------------------------------------------------
+' 外部システム
+' -----------------------------------------------------
 
-同じパラメータが複数回登場するケースについて、特別な考慮やエラー判定は不要とする。
+skinparam nodeBackgroundColor #F8FAFC
+skinparam nodeBorderColor #94A3B8
+skinparam nodeFontColor #334155
+skinparam nodeFontSize 12
 
----
 
-### 8.6 パラメータが存在しないPythonファイル
+' -----------------------------------------------------
+' テーブル群
+' -----------------------------------------------------
 
-対象Pythonファイルからパラメータを1件も抽出できなかった場合、そのPythonファイルについては `.conf` を生成せず、警告を標準エラー出力へ表示して処理を継続する。
+skinparam frameBackgroundColor #F8FAFC
+skinparam frameBorderColor #CBD5E1
+skinparam frameFontColor #475569
+skinparam frameFontSize 12
 
-出力例：
 
-```text
-jobparametersのパラメータが見つからないためスキップします: /path/to/python/file1.py
-```
+' -----------------------------------------------------
+' 注釈
+' -----------------------------------------------------
 
-1ファイルの抽出失敗によって、ほかのPythonファイルの処理は停止しない。
+skinparam noteBackgroundColor #FFFBEB
+skinparam noteBorderColor #FCD34D
+skinparam noteFontColor #713F12
+skinparam noteFontSize 11
 
----
 
-## 9. パラメータ名のチェック仕様
+' -----------------------------------------------------
+' 凡例
+' -----------------------------------------------------
 
-抽出したパラメータ名は、シェル変数名として使用可能な形式かチェックする。
+skinparam legendBackgroundColor #FFFFFF
+skinparam legendBorderColor #CBD5E1
+skinparam legendFontColor #334155
+skinparam legendFontSize 11
 
-許可する形式：
 
-* 先頭は半角英字またはアンダースコア
-* 2文字目以降は半角英字、半角数字、アンダースコア
+' =====================================================
+' メイン側の入力
+' =====================================================
 
-判定条件：
+$dataFile("F00", "売上データファイル", "sales.csv", "売上レコード")
 
-```bash
-^[A-Za-z_][A-Za-z0-9_]*$
-```
+$table("T00", "基準データ抽出元", "T_REFERENCE_SOURCE")
 
-許可例：
 
-```text
-param1
-_param1
-PARAM_1
-abc
-```
+' 入力元を横並びに配置
+F00 -[hidden]right-> T00
 
-不許可例：
 
-```text
-1param
-param-name
-param.name
-param name
-```
+$job("J01", "取込", "ファイル取込", "import_sales.py", "入力ファイル：sales.csv~文字コード：UTF-8", "日次")
 
-不正なパラメータ名を検出した場合は、異常終了する。
+$job("J02", "取込", "第1基準データ抽出", "extract_reference.py", "対象日：業務日~登録先：基準データセット①", "日次")
 
-エラー例：
 
-```text
-不正なパラメータ名です: /path/to/python/file1.py: param-name
-```
+' ジョブを横並びに配置
+J01 -[hidden]right-> J02
 
----
 
-## 10. 出力フォルダ
+' 入力オブジェクトの下側にジョブを配置
+F00 -down-> J01 : ファイル読込
+T00 -down-> J02 : 基準データ取得
 
-### 10.1 フォルダ名
 
-出力先親フォルダの直下に、以下の形式でフォルダを作成する。
+$table("T01", "取込済売上情報", "T_SALES_IMPORTED", "取込済売上レコード")
 
-```text
-conf_yyyyMMdd_HHmmss
-```
 
-例：
+J01 -down-> T01 : レコード登録
 
-```text
-conf_20260716_083000
-```
 
-タイムスタンプ取得例：
+' =====================================================
+' 基準データテーブル群①
+' =====================================================
 
-```bash
-timestamp="$(date '+%Y%m%d_%H%M%S')"
-```
+frame "<b>基準データテーブル群①</b>" as REFERENCE_TABLES_1 {
 
-出力フォルダ例：
+    $table("T02MGT1", "AAA情報", "T_MANAGEMENT_INFO_01")
 
-```bash
-output_dir="${output_base_dir}/conf_${timestamp}"
-```
+    $table("T02BASE1", "BBB情報", "T_BASIC_INFO_01")
 
----
+    $table("T02DA1", "CCC情報（Aカウンタ）", "T_DETAIL_INFO_A_01")
 
-### 10.2 出力先親フォルダの存在チェック
+    $table("T02DB1", "CCC情報（Bカウンタ）", "T_DETAIL_INFO_B_01")
 
-指定された出力先親フォルダが存在しない場合は、異常終了する。
+    $table("T02DC1", "CCC情報（Cカウンタ）", "T_DETAIL_INFO_C_01")
 
-スクリプト側で出力先親フォルダを自動作成しない。
+    $table("T02DD1", "CCC情報（Dカウンタ）", "T_DETAIL_INFO_D_01")
 
-エラー例：
 
-```text
-出力先親フォルダが存在しません: /path/to/output
-```
+    ' ---------------------------------------------
+    ' 親子孫リレーション
+    ' ---------------------------------------------
 
----
+    T02MGT1 -down-> T02BASE1 : 1 対 N
 
-### 10.3 タイムスタンプフォルダの作成
+    T02BASE1 -down-> T02DA1 : 1 対 N
+    T02BASE1 -down-> T02DB1 : 1 対 N
+    T02BASE1 -down-> T02DC1 : 1 対 N
+    T02BASE1 -down-> T02DD1 : 1 対 N
 
-出力先親フォルダが存在する場合、その配下にタイムスタンプフォルダを作成する。
 
-作成に失敗した場合は異常終了する。
+    ' CCC4テーブルを横並びに配置
+    T02DA1 -[hidden]right-> T02DB1
+    T02DB1 -[hidden]right-> T02DC1
+    T02DC1 -[hidden]right-> T02DD1
+}
 
-エラー例：
 
-```text
-出力フォルダを作成できませんでした: /path/to/output/conf_20260716_083000
-```
+T01 -[hidden]right-> REFERENCE_TABLES_1
 
----
 
-### 10.4 生成件数が0件の場合
+' 第1基準データ抽出の出力
+J02 -down-> REFERENCE_TABLES_1 : 6テーブルへ登録
 
-すべてのPythonファイルでパラメータが見つからず、`.conf` が1件も生成されなかった場合は、作成済みのタイムスタンプフォルダを削除し、異常終了する。
 
-エラー例：
+' =====================================================
+' 基準データセット①を参照するジョブ
+'
+' フレーム全体を参照する矢印は、
+' フレーム外側の枠なし接続点から出す。
+' =====================================================
 
-```text
-confファイルは作成されませんでした。
-```
+label " " as REF1_OUTSIDE
 
----
 
-## 11. 出力ファイル
+' 接続点をフレーム直下へ配置
+REFERENCE_TABLES_1 -[hidden]down-> REF1_OUTSIDE
 
-### 11.1 ファイル名
 
-Pythonファイルの拡張子 `.py` を除去し、拡張子 `.conf` を付与する。
+$job("J03ALL1", "統合・分類", "第1基準データ統合", "merge_reference_set1.py", "対象日：業務日~参照範囲：基準データセット①全体", "日次")
 
-例：
+$job("J03A", "統合・分類", "Aカウンタ対象抽出", "extract_counter_a.py", "対象日：業務日~参照範囲：セット①のAAA・BBB・CCCA~対象カウンタ：A", "日次")
 
-```text
-file1.py
-```
 
-生成結果：
+J03ALL1 -[hidden]right-> J03A
 
-```text
-file1.conf
-```
 
-出力先：
+' -----------------------------------------------------
+' セット①の全6テーブルを参照
+' -----------------------------------------------------
 
-```text
-/path/to/output/conf_20260716_083000/file1.conf
-```
+T01 -down-> J03ALL1 : 売上レコード
 
----
+REF1_OUTSIDE -down-> J03ALL1 : 全6テーブル参照
 
-### 11.2 出力内容
 
-出力順序は以下とする。
+' -----------------------------------------------------
+' セット①の一部テーブルだけを参照
+' -----------------------------------------------------
 
-1. `worker_nums`
-2. `worker_type`
-3. 抽出したパラメータ
+T02MGT1 -down-> J03A : AAA情報
+T02BASE1 -down-> J03A : BBB情報
+T02DA1 -down-> J03A : CCC情報・A
 
-出力例：
 
-```properties
-worker_nums="1"
-worker_type="ABC"
-param1="${param1}"
-param2="${param2}"
-param3="${param3}"
-```
+$table("T03", "売上分類済情報", "T_SALES_CLASSIFIED", "Aレコード~Bレコード~Cレコード")
 
-すべての値をダブルクォートで囲む。
+$table("T03A", "Aカウンタ対象情報", "T_COUNTER_A_TARGET")
 
-パラメータ行の形式は以下とする。
 
-```text
-パラメータ名="${パラメータ名}"
-```
+T03 -[hidden]right-> T03A
 
-例：
 
-```properties
-param1="${param1}"
-```
+J03ALL1 -down-> T03 : 統合・分類
 
----
+J03A -down-> T03A : 対象レコード登録
 
-### 11.3 上書き設定適用時の例
 
-Pythonファイル：
+note left of J03ALL1
+  <b>セット①・全テーブル参照</b>
 
-```text
-file2.py
-```
+  AAA情報
+  BBB情報
+  CCC情報・A
+  CCC情報・B
+  CCC情報・C
+  CCC情報・D
+end note
 
-Pythonソース：
 
-```python
-parsed_args = jobparameters(
-    args,
-    "param1",
-    "param2",
-    "param3"
-)
-```
+note right of J03A
+  <b>セット①・一部テーブル参照</b>
 
-設定ファイル：
+  AAA情報
+  BBB情報
+  CCC情報・Aカウンタ
 
-```properties
-file2=2,CBD
-```
+  B・C・DのCCC情報は参照しない。
+end note
 
-生成される `file2.conf`：
 
-```properties
-worker_nums="2"
-worker_type="CBD"
-param1="${param1}"
-param2="${param2}"
-param3="${param3}"
-```
+' =====================================================
+' サブシステムからのHULFT連携
+' =====================================================
 
----
+node "<b>サブシステム</b>" as SUB_SYSTEM {
 
-## 12. 処理フロー
+    $dataFile("F02SUB", "第2基準データ送信ファイル", "reference_set2.dat", "基準データレコード")
+}
 
-処理の全体フローは以下とする。
 
-1. 引数が2つであることを確認する。
-2. Pythonファイル格納フォルダが存在することを確認する。
-3. 出力先親フォルダが存在することを確認する。
-4. スクリプト自身の配置フォルダを取得する。
-5. `worker_settings_override.properties` が存在することを確認する。
-6. `worker_settings_override.properties` を1行ずつ読み込む。
-7. 空行とコメント行を除外する。
-8. 各設定行の形式をチェックする。
-9. ファイル名、`worker_nums`、`worker_type` を連想配列へ格納する。
-10. Pythonファイル格納フォルダ直下の `.py` ファイルを取得する。
-11. `.py` ファイルが0件の場合は異常終了する。
-12. 出力先親フォルダ配下にタイムスタンプフォルダを作成する。
-13. Pythonファイルを1件ずつ処理する。
-14. Pythonファイル名から拡張子を除去する。
-15. `jobparameters` のパラメータを抽出する。
-16. パラメータが0件の場合は、そのPythonファイルをスキップする。
-17. 既定のワーカー設定を設定する。
-18. propertiesに対象ファイルの設定がある場合、ワーカー設定を上書きする。
-19. 抽出したパラメータ名をチェックする。
-20. `.conf` ファイルを出力する。
-21. 出力したファイルパスを標準出力へ表示する。
-22. 全Pythonファイルの処理後、生成件数を確認する。
-23. 生成件数が0件の場合は出力フォルダを削除して異常終了する。
-24. 生成件数が1件以上の場合は、出力先フォルダを標準出力へ表示して正常終了する。
+$dataFile("F02MAIN", "第2基準データ受信ファイル", "reference_set2.dat", "基準データレコード")
 
----
 
-## 13. 正常時のメッセージ
+' サブシステムからメインシステムへのHULFT配信
+F02SUB ..down.> F02MAIN : HULFT配信\nサブ → メイン
 
-ファイル生成ごとに、以下を標準出力へ表示する。
 
-```text
-出力しました: /path/to/output/conf_20260716_083000/file1.conf
-```
+$job("J02H", "取込", "第2基準データ取込", "load_reference_set2.py", "受信ファイル：reference_set2.dat~登録先：基準データセット②", "日次")
 
-すべての処理完了後に、以下を表示する。
 
-```text
-出力先フォルダ: /path/to/output/conf_20260716_083000
-```
+F02MAIN -down-> J02H : ファイル読込
 
----
 
-## 14. 異常終了条件
+' =====================================================
+' 基準データテーブル群②
+' =====================================================
 
-以下の場合は、終了コードを0以外として異常終了する。
+frame "<b>基準データテーブル群②</b>" as REFERENCE_TABLES_2 {
 
-* 引数の数が2つでない。
-* Pythonファイル格納フォルダが存在しない。
-* 出力先親フォルダが存在しない。
-* `worker_settings_override.properties` が存在しない。
-* propertiesの設定行に `=` が存在しない。
-* propertiesの左辺のファイル名が空。
-* propertiesに同一ファイル名が複数記載されている。
-* propertiesの右辺にカンマがない。
-* propertiesの右辺にカンマが2個以上ある。
-* `worker_nums` が数字のみではない。
-* `worker_type` に許可されていない文字が含まれている。
-* Pythonファイル格納フォルダ直下に `.py` ファイルがない。
-* タイムスタンプ付き出力フォルダを作成できない。
-* 抽出したパラメータ名が不正。
-* `.conf` ファイルが1件も作成されなかった。
-* ファイルの読み書きなどで、シェルコマンドが失敗した。
+    $table("T02MGT2", "AAA情報", "T_MANAGEMENT_INFO_02")
 
-シェルスクリプトでは、未処理のコマンドエラーや未定義変数などを検出するため、以下を使用する。
+    $table("T02BASE2", "BBB情報", "T_BASIC_INFO_02")
 
-```bash
-set -euo pipefail
-```
+    $table("T02DA2", "CCC情報（Aカウンタ）", "T_DETAIL_INFO_A_02")
 
----
+    $table("T02DB2", "CCC情報（Bカウンタ）", "T_DETAIL_INFO_B_02")
 
-## 15. 警告扱いとする条件
+    $table("T02DC2", "CCC情報（Cカウンタ）", "T_DETAIL_INFO_C_02")
 
-以下は、スクリプト全体の即時異常終了とはしない。
+    $table("T02DD2", "CCC情報（Dカウンタ）", "T_DETAIL_INFO_D_02")
 
-* 個別のPythonファイルから `jobparameters` のパラメータを抽出できなかった場合
 
-この場合、そのPythonファイルのみスキップし、ほかのPythonファイルの処理を継続する。
+    ' ---------------------------------------------
+    ' 親子孫リレーション
+    ' ---------------------------------------------
 
-ただし、最終的に `.conf` が1件も生成されなかった場合は、全体として異常終了する。
+    T02MGT2 -down-> T02BASE2 : 1 対 N
 
----
+    T02BASE2 -down-> T02DA2 : 1 対 N
+    T02BASE2 -down-> T02DB2 : 1 対 N
+    T02BASE2 -down-> T02DC2 : 1 対 N
+    T02BASE2 -down-> T02DD2 : 1 対 N
 
-## 16. 実装上の前提・制限
 
-### 16.1 Python構文解析ではない
+    ' CCC4テーブルを横並びに配置
+    T02DA2 -[hidden]right-> T02DB2
+    T02DB2 -[hidden]right-> T02DC2
+    T02DC2 -[hidden]right-> T02DD2
+}
 
-パラメータ抽出はPythonのAST解析ではなく、Perlの正規表現によって行う。
 
-そのため、複雑なPython構文や、以下のような記述は正しく処理できない可能性がある。
+J02H -down-> REFERENCE_TABLES_2 : 6テーブルへ登録
 
-```python
-jobparameters(
-    args,
-    get_parameter_name(),
-    SOME_CONSTANT
-)
-```
 
-本ツールでは、パラメータ名がシングルクォートまたはダブルクォートの文字列リテラルとして記述されていることを前提とする。
+note right of J02H
+  サブシステムからHULFTで受信した
+  ファイルを読み込み、
+  基準データテーブル群②へ登録する。
+end note
 
----
 
-### 16.2 閉じ括弧を含む特殊な文字列
+' =====================================================
+' 第2基準データ統合
+'
+' フレーム内部に接続点を置かず、
+' フレーム外側の枠なし接続点を使用する。
+' =====================================================
 
-正規表現では `jobparameters` の引数を `)` までとして取得するため、引数内の文字列に閉じ括弧が含まれるような特殊な記述は想定しない。
+label " " as REF2_OUTSIDE
 
----
 
-### 16.3 同名Pythonファイル
+' 接続点をフレーム直下へ配置
+REFERENCE_TABLES_2 -[hidden]down-> REF2_OUTSIDE
 
-処理対象は1つのフォルダの直下のみであるため、同一フォルダ内に同じファイル名のPythonファイルは存在しない前提とする。
 
----
+$job("J03ALL2", "統合・分類", "第2基準データ統合", "merge_reference_set2.py", "対象日：業務日~参照範囲：基準データセット②全体", "日次")
 
-### 16.4 出力ファイルの既存チェック
 
-出力先は実行ごとに新しいタイムスタンプフォルダとなるため、通常は同名の `.conf` ファイルは存在しない。
+REF2_OUTSIDE -down-> J03ALL2 : 全6テーブル参照
 
-同一秒内に同じ出力先で複数回実行した場合、タイムスタンプフォルダ名が衝突する可能性がある。
 
-現在の仕様では、出力フォルダがすでに存在して `mkdir` に失敗した場合は異常終了する。
+$table("T03B", "第2基準データ統合結果", "T_REFERENCE_SET2_MERGED", "AAA・BBB・CCC統合レコード")
 
----
 
-## 17. 受入条件
+J03ALL2 -down-> T03B : 統合結果登録
 
-以下を満たすこと。
 
-### 正常系1：既定値で生成
+note right of J03ALL2
+  <b>セット②・全テーブル参照</b>
 
-入力：
+  AAA情報
+  BBB情報
+  CCC情報・A
+  CCC情報・B
+  CCC情報・C
+  CCC情報・D
+end note
 
-```text
-file1.py
-```
 
-Pythonソース：
+' =====================================================
+' 同一プログラムを異なる引数で並列起動
+' =====================================================
 
-```python
-parsed_args = jobparameters(
-    args,
-    "param1",
-    "param2"
-)
-```
+$job("J04", "統合・分類", "Aレコード処理", "process_record.py", "レコード区分：A~対象日：業務日", "日次", "sameProgram")
 
-properties：
+$job("J05", "統合・分類", "Bレコード処理", "process_record.py", "レコード区分：B~対象日：業務日", "日次", "sameProgram")
 
-```properties
-# file1の設定は記載しない
-```
+$job("J06", "統合・分類", "Cレコード処理", "process_record.py", "レコード区分：C~対象日：業務日", "日次", "sameProgram")
 
-期待結果：
 
-```properties
-worker_nums="1"
-worker_type="ABC"
-param1="${param1}"
-param2="${param2}"
-```
+' 3ジョブを横並びに配置
+J04 -[hidden]right-> J05
+J05 -[hidden]right-> J06
 
----
 
-### 正常系2：ワーカー設定を上書き
+' 入力テーブルの下側へジョブを配置
+T03 -down-> J04 : Aレコード
+T03 -down-> J05 : Bレコード
+T03 -down-> J06 : Cレコード
 
-properties：
 
-```properties
-file1=2,CBD
-```
+$table("T06", "処理済売上情報", "T_SALES_PROCESSED", "Aレコード~Bレコード~Cレコード")
 
-期待結果：
 
-```properties
-worker_nums="2"
-worker_type="CBD"
-param1="${param1}"
-param2="${param2}"
-```
+J04 -down-> T06 : Aレコード登録
+J05 -down-> T06 : Bレコード登録
+J06 -down-> T06 : Cレコード登録
 
----
 
-### 正常系3：複数行のjobparameters
+note right of J06
+  3ジョブは同じプログラムを使用する。
 
-Pythonソース：
+  レコード区分によって
+  入出力対象を分ける。
 
-```python
-parsed_args = jobparameters(
-    args,
-    "param1",
-    "param2",
-    "param3"
-)
-```
+  3ジョブは並列で実行する。
+end note
 
-期待結果：
 
-```properties
-worker_nums="1"
-worker_type="ABC"
-param1="${param1}"
-param2="${param2}"
-param3="${param3}"
-```
+' =====================================================
+' 周期別の売上集計
+' =====================================================
 
----
+$job("J07D", "集計", "日次売上集計", "aggregate_daily.py", "対象日：業務日", "日次")
 
-### 正常系4：同一パラメータの重複
+$job("J07M", "集計", "月次売上集計", "aggregate_monthly.py", "対象年月：処理年月", "月次")
 
-Pythonソース：
+$job("J07Q", "集計", "期次売上集計", "aggregate_quarterly.py", "対象期：処理対象期", "期次")
 
-```python
-parsed_args1 = jobparameters(args, "param1", "param2")
-parsed_args2 = jobparameters(args, "param1", "param3")
-```
+$job("J07Y", "集計", "年次売上集計", "aggregate_yearly.py", "対象年度：処理年度", "年次")
 
-期待結果：
 
-```properties
-worker_nums="1"
-worker_type="ABC"
-param1="${param1}"
-param2="${param2}"
-param1="${param1}"
-param3="${param3}"
-```
+' 2列×2段に配置
+J07D -[hidden]right-> J07M
+J07D -[hidden]down-> J07Q
+J07Q -[hidden]right-> J07Y
 
-重複排除しないこと。
 
----
+' 入力テーブルの下側へ各ジョブを配置
+T06 -down-> J07D : 処理済レコード
+T06 -down-> J07M : 処理済レコード
+T06 -down-> J07Q : 処理済レコード
+T06 -down-> J07Y : 処理済レコード
 
-### 正常系5：コメントと空行
 
-properties：
+$table("T07D", "日次売上集計情報", "T_SALES_DAILY")
 
-```properties
-# コメント
+$table("T07M", "月次売上集計情報", "T_SALES_MONTHLY")
 
-file1 = 2, CBD
+$table("T07Q", "期次売上集計情報", "T_SALES_QUARTERLY")
 
-; コメント
-file2=1,ABC
-```
+$table("T07Y", "年次売上集計情報", "T_SALES_YEARLY")
 
-期待結果：
 
-* コメント行と空行を無視する。
-* `file1` は `2,CBD` として読み込む。
-* `file2` は `1,ABC` として読み込む。
+' 出力テーブルを2列×2段に配置
+T07D -[hidden]right-> T07M
+T07D -[hidden]down-> T07Q
+T07Q -[hidden]right-> T07Y
 
----
 
-### 異常系1：propertiesが存在しない
+J07D -down-> T07D : 日次集計結果
+J07M -down-> T07M : 月次集計結果
+J07Q -down-> T07Q : 期次集計結果
+J07Y -down-> T07Y : 年次集計結果
 
-期待結果：
 
-* `.conf` を生成しない。
-* 異常終了する。
-* 設定ファイルが存在しない旨を標準エラー出力へ表示する。
+note right of J07Y
+  周期ごとに起動日と
+  対象期間が異なる。
 
----
+  日次：毎営業日
+  月次：月末または月初
+  期次：四半期末
+  年次：年度末
+end note
 
-### 異常系2：propertiesのキーが重複
 
-properties：
+' =====================================================
+' 日次集計結果の本番反映
+' =====================================================
 
-```properties
-file1=1,ABC
-file1=2,CBD
-```
+$job("J08", "反映", "マスタ情報付与", "enrich_sales.py", "マスタ基準日：業務日", "日次")
 
-期待結果：
 
-* 異常終了する。
-* 重複したファイル名と行番号を表示する。
+T07D -down-> J08 : 日次集計済レコード
 
----
 
-### 異常系3：worker_numsが不正
+$table("T08", "マスタ付与済売上情報", "T_SALES_ENRICHED")
 
-properties：
 
-```properties
-file1=A,ABC
-```
+J08 -down-> T08 : マスタ情報付与
 
-期待結果：
 
-* 異常終了する。
-* `worker_nums` が整数でない旨を表示する。
+$job("J09", "反映", "出力データ編集", "format_output.py", "出力形式：CSV", "日次")
 
----
 
-### 異常系4：worker_typeが不正
+T08 -down-> J09 : 付与済レコード
 
-properties：
 
-```properties
-file1=1,ABC DEF
-```
+$table("T09", "売上出力ワーク情報", "T_SALES_OUTPUT_WORK", "出力編集済売上レコード")
 
-期待結果：
 
-* 異常終了する。
-* `worker_type` に使用できない文字がある旨を表示する。
+J09 -down-> T09 : 出力形式へ編集
 
----
 
-### 異常系5：不正なパラメータ名
+$job("J10", "反映", "本番テーブル反映", "load_result.sh", "対象日：業務日~登録先：5テーブル", "日次")
 
-Pythonソース：
 
-```python
-parsed_args = jobparameters(args, "param-name")
-```
+T09 -down-> J10 : 編集済レコード
 
-期待結果：
 
-* 異常終了する。
-* 不正なパラメータ名と対象Pythonファイルを表示する。
+' =====================================================
+' 売上結果テーブル群
+' =====================================================
 
----
+frame "<b>売上結果テーブル群</b>" as RESULT_TABLES {
 
-### 異常系6：Pythonファイルが0件
+    $table("T10A", "売上ヘッダ情報", "T_SALES_HEADER", "", "result")
 
-期待結果：
+    $table("T10B", "売上CCC情報", "T_SALES_DETAIL", "", "result")
 
-* タイムスタンプフォルダを作成しない。
-* `.py` ファイルが見つからない旨を表示する。
-* 異常終了する。
+    $table("T10C", "売上税額情報", "T_SALES_TAX", "", "result")
 
----
+    $table("T10D", "売上集計情報", "T_SALES_SUMMARY", "", "result")
 
-### 異常系7：すべてのPythonファイルにパラメータがない
+    $table("T10E", "売上更新履歴情報", "T_SALES_HISTORY", "", "result")
 
-期待結果：
 
-* 各Pythonファイルを警告付きでスキップする。
-* 作成済みのタイムスタンプフォルダを削除する。
-* `.conf` ファイルが作成されなかった旨を表示する。
-* 異常終了する。
+    ' 3列＋2列に配置
+    T10A -[hidden]right-> T10B
+    T10B -[hidden]right-> T10C
+
+    T10A -[hidden]down-> T10D
+    T10D -[hidden]right-> T10E
+}
+
+
+J10 -down-> RESULT_TABLES : 5テーブルへ反映
+
+
+' =====================================================
+' 結果検証
+' =====================================================
+
+$job("J11", "検証", "反映結果照合", "reconcile_result.py", "対象日：業務日", "日次")
+
+
+' 入力テーブルの下側へジョブを配置
+T09 -down-> J11 : 反映前データ
+T10B -down-> J11 : 反映後の売上CCC
+
+
+$table("T11", "反映結果照合情報", "T_RECONCILIATION_RESULT")
+
+
+J11 -down-> T11 : 照合結果登録
+
+
+note right of J11
+  本番テーブル反映の正常終了後に
+  反映結果照合を起動する。
+
+  反映前のワークテーブルと
+  反映後の売上CCCテーブルを比較する。
+end note
+
+
+' =====================================================
+' 凡例
+' =====================================================
+
+legend right
+  |= 表現 |= 意味 |
+  | <back:#E0F2FE><color:#0369A1><b> 取込 </b></color></back> | 取込機能 |
+  | <back:#F3E8FF><color:#7E22CE><b> 統合・分類 </b></color></back> | 統合・分類機能 |
+  | <back:#DCFCE7><color:#15803D><b> 集計 </b></color></back> | 集計機能 |
+  | <back:#FEF3C7><color:#B45309><b> 反映 </b></color></back> | 本番反映機能 |
+  | <back:#F1F5F9><color:#475569><b> 検証 </b></color></back> | 結果検証機能 |
+  | <color:#2563EB><b>● 日次</b></color> | 日次実行 |
+  | <color:#059669><b>■ 月次</b></color> | 月次実行 |
+  | <color:#D97706><b>◆ 期次</b></color> | 期次実行 |
+  | <color:#7C3AED><b>★ 年次</b></color> | 年次実行 |
+  | <back:#EEF2FF><color:#4F46E5><b> 共通PG </b></color></back> | 同じプログラムを別引数で起動 |
+  | 太字の日本語名 | ジョブ・テーブル・ファイルの論理名 |
+  | 論理名直下の英数字名 | プログラム・テーブル・ファイルの物理名 |
+  | 物理名直下の空行 | 論理情報と詳細一覧の区切り |
+  | <b>[args]</b> | 指定がある場合だけ表示する実行引数 |
+  | <b>[records]</b> | 指定がある場合だけ表示するレコード一覧 |
+  | <b>- 項目</b> | 引数またはレコードの各要素 |
+  | 右上が折り返された図形 | ファイル |
+  | 円柱 | 個別の物理テーブル |
+  | 円柱を囲う箱 | 関連するテーブル群 |
+  | 1対Nの矢印 | 親子または子孫のリレーション |
+  | 破線矢印 | HULFTによるシステム間ファイル配信 |
+endlegend
+
+@enduml
