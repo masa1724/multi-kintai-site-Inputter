@@ -17,7 +17,6 @@ class SarWorkArea(StrEnum):
         return obj
 
 
-# ★「workSegments.ps1」と同期を取ること
 class HrmosWorkSegment(StrEnum):
     """HRMOS の勤務区分 ID と画面表示名の対応表。"""
 
