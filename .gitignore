@@ -4,6 +4,7 @@ work/
 
 env.ps1
 work_record_defaults.json
+work_record_presets.json
 work_records.yaml
 
 .DS_Store
