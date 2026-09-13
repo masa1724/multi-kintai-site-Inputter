@@ -27,6 +27,15 @@ notepad ./env.ps1
 ```
 
 ## 6. 実行
+### 6.0. Wails GUI（開発中）
+```powershell
+cd desktop
+wails build
+./build/bin/desktop.exe
+```
+Go、Node.js、Wails CLI、WebView2 が必要です。画面は最大化して開き、月〜日の7行で全項目を1日1行で編集できます。チェックした日だけを登録できます。よく使う入力は日付を除いて保存され、画面上部の「よく使う入力を編集」からタイトルと内容を変更できます。データは既存の `work_record_presets.json` と共通です。登録時のみ既存の Python 処理を呼び出します。`env.ps1` と `.venv` は従来どおりリポジトリ直下に置いてください。
+今日の日付は画面上部に表示されます。出力する `work_records.yaml` の項目順は `target_date`、`work_segment`、時刻・休憩・交通費・備考、SAR項目の順で固定です。
+
 ### 6.1. GUIから登録（1週間分）
 ```bash
 ./create_work_record_gui.bat
