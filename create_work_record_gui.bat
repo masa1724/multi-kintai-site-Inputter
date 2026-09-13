@@ -1,4 +1,10 @@
 @echo off
 setlocal
-powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0create_work_record_gui.ps1"
+set "app=%~dp0desktop\build\bin\desktop.exe"
+if not exist "%app%" (
+  echo Wails app not found: "%app%"
+  echo Run "wails build" in the desktop directory first.
+  exit /b 1
+)
+start "" /D "%~dp0desktop" "%app%"
 exit /b %errorlevel%
