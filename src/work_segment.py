@@ -17,6 +17,7 @@ class SarWorkArea(StrEnum):
         return obj
 
 
+# メンバー名は desktop/frontend/src/App.tsx の segments のキーと一致させる。
 class HrmosWorkSegment(StrEnum):
     """HRMOS の勤務区分 ID と画面表示名の対応表。"""
 
