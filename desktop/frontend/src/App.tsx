@@ -5,6 +5,7 @@ import './App.css';
 type RecordValues = {[key: string]: string};
 type Day = {enabled: boolean; values: RecordValues};
 
+// キーは src/work_segment.py の HrmosWorkSegment と一致させる（表示名は画面向けに独立）。
 const segments = [
   ['OFFICE', '出勤'], ['REMOTE', '在宅'], ['HOLIDAY', '公休'],
   ['SUBSTITUTE', '振休'], ['PAID_LEAVE', '有休'], ['SPECIAL_LEAVE', '特休'],
