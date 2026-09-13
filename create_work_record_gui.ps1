@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 $script:OutputPath = Join-Path $PSScriptRoot "work_records.yaml"
 $script:DefaultPath = Join-Path $PSScriptRoot "work_record_defaults.json"
+$script:PresetPath = Join-Path $PSScriptRoot "work_record_presets.json"
 
 $defaults = [ordered]@{
   target_date         = "2026-04-21"
@@ -207,6 +208,66 @@ function Set-FormValues {
   }
 }
 
+function Copy-Values {
+  param([object]$Values)
+  $copy = @{}
+  foreach ($key in $defaults.Keys) {
+    $copy[$key] = [string]$Values[$key]
+  }
+  return $copy
+}
+
+function Load-Presets {
+  if (-not (Test-Path $script:PresetPath)) { return @{} }
+  $json = Get-Content -LiteralPath $script:PresetPath -Raw -Encoding UTF8
+  if ([string]::IsNullOrWhiteSpace($json)) { return @{} }
+  $saved = $json | ConvertFrom-Json
+  $result = @{}
+  foreach ($entry in $saved.PSObject.Properties) {
+    $values = @{}
+    foreach ($key in $defaults.Keys) {
+      if ($key -ne "target_date") {
+        $property = $entry.Value.PSObject.Properties[$key]
+        $values[$key] = if ($null -eq $property) { "" } else { [string]$property.Value }
+      }
+    }
+    $result[$entry.Name] = $values
+  }
+  return $result
+}
+
+function Save-Presets {
+  $json = $script:Presets | ConvertTo-Json -Depth 5
+  [System.IO.File]::WriteAllText(
+    $script:PresetPath,
+    "$json$([Environment]::NewLine)",
+    (New-Object System.Text.UTF8Encoding($false))
+  )
+}
+
+function Refresh-PresetList {
+  $selected = [string]$presetCombo.SelectedItem
+  $presetCombo.Items.Clear()
+  foreach ($name in ($script:Presets.Keys | Sort-Object)) {
+    [void]$presetCombo.Items.Add($name)
+  }
+  if ($presetCombo.Items.Contains($selected)) { $presetCombo.SelectedItem = $selected }
+}
+
+function Save-SelectedDay {
+  if ($script:SelectedDay -ge 0) {
+    $script:WeekValues[$script:SelectedDay] = Copy-Values (Get-CurrentValues)
+  }
+}
+
+function Show-SelectedDay {
+  param([int]$Index)
+  Save-SelectedDay
+  $script:SelectedDay = $Index
+  Set-FormValues $script:WeekValues[$Index]
+  $dayLabel.Text = "編集中: $($script:WeekValues[$Index].target_date)"
+}
+
 function ConvertTo-YamlDoubleQuoted {
   param([string]$Value)
 
@@ -243,25 +304,11 @@ function New-WorkRecordYaml {
   return ($lines -join [Environment]::NewLine)
 }
 
-function Add-WorkRecord {
-  param([hashtable]$Values)
+function Save-WorkRecords {
+  param([object[]]$Records)
 
-  $date = [datetime]::MinValue
-  if (-not [datetime]::TryParseExact(
-      $Values.target_date,
-      "yyyy-MM-dd",
-      [Globalization.CultureInfo]::InvariantCulture,
-      [Globalization.DateTimeStyles]::None,
-      [ref]$date
-    )) {
-    throw "target_date は YYYY-MM-DD 形式で入力してください。"
-  }
-
-  if ([string]::IsNullOrWhiteSpace($Values.work_segment)) {
-    throw "work_segment は必須です。"
-  }
-
-  $recordYaml = New-WorkRecordYaml $Values
+  if ($Records.Count -eq 0) { throw "登録する日を1日以上選択してください。" }
+  $recordYaml = @($Records | ForEach-Object { New-WorkRecordYaml $_ }) -join [Environment]::NewLine
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   $newContent = "records:$([Environment]::NewLine)$recordYaml$([Environment]::NewLine)"
   [System.IO.File]::WriteAllText($script:OutputPath, $newContent, $utf8NoBom)
@@ -290,24 +337,93 @@ function Invoke-KintaiRegistration {
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $script:ActiveDefaults = Load-DefaultValues
+$script:Presets = Load-Presets
+$script:SelectedDay = -1
+$script:WeekValues = @()
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "work_records.yaml 1レコード作成"
+$form.Text = "勤怠入力（1週間）"
 $form.StartPosition = "CenterScreen"
-$form.Size = New-Object System.Drawing.Size(560, 750)
-$form.MinimumSize = New-Object System.Drawing.Size(560, 750)
+$form.Size = New-Object System.Drawing.Size(600, 850)
+$form.MinimumSize = New-Object System.Drawing.Size(600, 650)
 
 $panel = New-Object System.Windows.Forms.Panel
 $panel.Dock = "Fill"
-$panel.AutoScroll = $false
+$panel.AutoScroll = $true
 $form.Controls.Add($panel)
 
 $fields = @{}
-$y = 16
+$y = 252
+
+$weekLabel = New-Object System.Windows.Forms.Label
+$weekLabel.Text = "週の開始日（月曜）"
+$weekLabel.Location = New-Object System.Drawing.Point(16, 16)
+$weekLabel.Size = New-Object System.Drawing.Size(150, 24)
+$panel.Controls.Add($weekLabel)
+
+$weekPicker = New-Object System.Windows.Forms.DateTimePicker
+$weekPicker.Format = "Custom"
+$weekPicker.CustomFormat = "yyyy-MM-dd"
+$weekPicker.Value = [datetime]::Today.AddDays(-(([int][datetime]::Today.DayOfWeek + 6) % 7))
+$weekPicker.Location = New-Object System.Drawing.Point(176, 16)
+$weekPicker.Size = New-Object System.Drawing.Size(230, 24)
+$panel.Controls.Add($weekPicker)
+
+$newWeekButton = New-Object System.Windows.Forms.Button
+$newWeekButton.Text = "週を表示"
+$newWeekButton.Location = New-Object System.Drawing.Point(414, 14)
+$newWeekButton.Size = New-Object System.Drawing.Size(90, 28)
+$panel.Controls.Add($newWeekButton)
+
+$weekHint = New-Object System.Windows.Forms.Label
+$weekHint.Text = "登録する日にチェックし、選択して内容を編集してください。"
+$weekHint.Location = New-Object System.Drawing.Point(16, 48)
+$weekHint.Size = New-Object System.Drawing.Size(540, 24)
+$panel.Controls.Add($weekHint)
+
+$dayList = New-Object System.Windows.Forms.CheckedListBox
+$dayList.CheckOnClick = $true
+$dayList.Location = New-Object System.Drawing.Point(16, 76)
+$dayList.Size = New-Object System.Drawing.Size(220, 116)
+$panel.Controls.Add($dayList)
+
+$dayLabel = New-Object System.Windows.Forms.Label
+$dayLabel.Location = New-Object System.Drawing.Point(250, 76)
+$dayLabel.Size = New-Object System.Drawing.Size(280, 24)
+$panel.Controls.Add($dayLabel)
+
+$presetCombo = New-Object System.Windows.Forms.ComboBox
+$presetCombo.DropDownStyle = "DropDownList"
+$presetCombo.Location = New-Object System.Drawing.Point(250, 106)
+$presetCombo.Size = New-Object System.Drawing.Size(190, 24)
+$panel.Controls.Add($presetCombo)
+
+$applyPresetButton = New-Object System.Windows.Forms.Button
+$applyPresetButton.Text = "適用"
+$applyPresetButton.Location = New-Object System.Drawing.Point(448, 104)
+$applyPresetButton.Size = New-Object System.Drawing.Size(58, 28)
+$panel.Controls.Add($applyPresetButton)
+
+$presetName = New-Object System.Windows.Forms.TextBox
+$presetName.Location = New-Object System.Drawing.Point(250, 142)
+$presetName.Size = New-Object System.Drawing.Size(190, 24)
+$panel.Controls.Add($presetName)
+
+$savePresetButton = New-Object System.Windows.Forms.Button
+$savePresetButton.Text = "よく使う入力に保存"
+$savePresetButton.Location = New-Object System.Drawing.Point(448, 140)
+$savePresetButton.Size = New-Object System.Drawing.Size(120, 28)
+$panel.Controls.Add($savePresetButton)
+
+$presetHint = New-Object System.Windows.Forms.Label
+$presetHint.Text = "左の日付を除いた1日分の入力を名前付きで保存します。"
+$presetHint.Location = New-Object System.Drawing.Point(250, 174)
+$presetHint.Size = New-Object System.Drawing.Size(320, 40)
+$panel.Controls.Add($presetHint)
 
 $todayLabel = New-Object System.Windows.Forms.Label
 $todayLabel.Text = [datetime]::Today.ToString("yyyy-MM-dd (ddd)", [Globalization.CultureInfo]::GetCultureInfo("ja-JP"))
-$todayLabel.Location = New-Object System.Drawing.Point(336, 16)
+$todayLabel.Location = New-Object System.Drawing.Point(336, 222)
 $todayLabel.Size = New-Object System.Drawing.Size(170, 24)
 $todayLabel.TextAlign = "MiddleRight"
 $panel.Controls.Add($todayLabel)
@@ -341,6 +457,7 @@ foreach ($key in $defaults.Keys) {
     $datePicker = New-Object System.Windows.Forms.DateTimePicker
     $datePicker.Format = "Custom"
     $datePicker.CustomFormat = "yyyy-MM-dd"
+    $datePicker.Enabled = $false
     $datePicker.Location = New-Object System.Drawing.Point(176, $y)
     $datePicker.Size = New-Object System.Drawing.Size(330, 24)
 
@@ -401,7 +518,7 @@ $updateDefaultButton.Size = New-Object System.Drawing.Size(120, 32)
 $panel.Controls.Add($updateDefaultButton)
 
 $saveButton = New-Object System.Windows.Forms.Button
-$saveButton.Text = "保存"
+$saveButton.Text = "登録"
 $saveButton.Location = New-Object System.Drawing.Point -ArgumentList 392, ($y + 8)
 $saveButton.Size = New-Object System.Drawing.Size(54, 32)
 $panel.Controls.Add($saveButton)
@@ -412,12 +529,88 @@ $cancelButton.Location = New-Object System.Drawing.Point -ArgumentList 452, ($y 
 $cancelButton.Size = New-Object System.Drawing.Size(54, 32)
 $panel.Controls.Add($cancelButton)
 
+function Initialize-Week {
+  $selectedDate = $weekPicker.Value.Date
+  $monday = $selectedDate.AddDays(-(([int]$selectedDate.DayOfWeek + 6) % 7))
+  $weekPicker.Value = $monday
+  $script:SelectedDay = -1
+  $script:WeekValues = @()
+  $dayList.Items.Clear()
+  for ($i = 0; $i -lt 7; $i++) {
+    $date = $monday.AddDays($i)
+    $values = Copy-Values $script:ActiveDefaults
+    $values.target_date = $date.ToString("yyyy-MM-dd")
+    $script:WeekValues += ,$values
+    $label = $date.ToString("MM/dd (ddd)", [Globalization.CultureInfo]::GetCultureInfo("ja-JP"))
+    [void]$dayList.Items.Add($label, ($i -lt 5))
+  }
+  $dayList.SelectedIndex = 0
+  Show-SelectedDay 0
+}
+
+$dayList.Add_SelectedIndexChanged({
+    if ($dayList.SelectedIndex -ge 0 -and $dayList.SelectedIndex -ne $script:SelectedDay) {
+      Show-SelectedDay $dayList.SelectedIndex
+    }
+  })
+
+$newWeekButton.Add_Click({
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+      "現在の週の未登録入力は破棄されます。別の週を表示しますか？",
+      "週の切り替え",
+      [System.Windows.Forms.MessageBoxButtons]::YesNo,
+      [System.Windows.Forms.MessageBoxIcon]::Question
+    )
+    if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { Initialize-Week }
+  })
+
+$applyPresetButton.Add_Click({
+    $name = [string]$presetCombo.SelectedItem
+    if ([string]::IsNullOrWhiteSpace($name)) { return }
+    $date = $script:WeekValues[$script:SelectedDay].target_date
+    $values = Copy-Values $script:Presets[$name]
+    $values.target_date = $date
+    $script:WeekValues[$script:SelectedDay] = $values
+    Set-FormValues $values
+  })
+
+$savePresetButton.Add_Click({
+    try {
+      $name = $presetName.Text.Trim()
+      if ([string]::IsNullOrWhiteSpace($name)) { throw "保存名を入力してください。" }
+      if ($script:Presets.ContainsKey($name)) {
+        $answer = [System.Windows.Forms.MessageBox]::Show(
+          "「$name」を上書きしますか？", "よく使う入力",
+          [System.Windows.Forms.MessageBoxButtons]::YesNo,
+          [System.Windows.Forms.MessageBoxIcon]::Question
+        )
+        if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+      }
+      $values = Copy-Values (Get-CurrentValues)
+      [void]$values.Remove("target_date")
+      $script:Presets[$name] = $values
+      Save-Presets
+      Refresh-PresetList
+      $presetCombo.SelectedItem = $name
+      [System.Windows.Forms.MessageBox]::Show("1日分の入力を保存しました。", "よく使う入力") | Out-Null
+    }
+    catch {
+      [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "保存エラー") | Out-Null
+    }
+  })
+
+Refresh-PresetList
+Initialize-Week
+
 $cancelButton.Add_Click({
     $form.Close()
   })
 
 $resetButton.Add_Click({
-    Set-FormValues $script:ActiveDefaults
+    $date = $script:WeekValues[$script:SelectedDay].target_date
+    $values = Copy-Values $script:ActiveDefaults
+    $values.target_date = $date
+    Set-FormValues $values
   })
 
 $updateDefaultButton.Add_Click({
@@ -444,9 +637,21 @@ $updateDefaultButton.Add_Click({
 $saveButton.Add_Click({
     try {
       $saveButton.Enabled = $false
-      $values = Get-CurrentValues
-
-      Add-WorkRecord $values
+      Save-SelectedDay
+      $records = @()
+      for ($i = 0; $i -lt 7; $i++) {
+        if ($dayList.GetItemChecked($i)) { $records += ,$script:WeekValues[$i] }
+      }
+      if ($records.Count -eq 0) { throw "登録する日を1日以上選択してください。" }
+      $dates = @($records | ForEach-Object { $_.target_date }) -join ", "
+      $answer = [System.Windows.Forms.MessageBox]::Show(
+        "次の日付をHRMOSとSARへ登録しますか？`n$dates",
+        "一括登録の確認",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Question
+      )
+      if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+      Save-WorkRecords $records
       Invoke-KintaiRegistration
     }
     catch {
